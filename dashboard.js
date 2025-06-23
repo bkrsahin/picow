@@ -88,6 +88,108 @@ function initializeCharts() {
         }
     });
 
+    // MPU6050 Gyro grafik
+    const gyroCtx = document.getElementById('gyroChart').getContext('2d');
+    charts.gyro = new Chart(gyroCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'Gyro X (°/s)',
+                    data: [],
+                    borderColor: '#ff9800',
+                    backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                    tension: 0.4,
+                    fill: false
+                },
+                {
+                    label: 'Gyro Y (°/s)',
+                    data: [],
+                    borderColor: '#9c27b0',
+                    backgroundColor: 'rgba(156, 39, 176, 0.1)',
+                    tension: 0.4,
+                    fill: false
+                },
+                {
+                    label: 'Gyro Z (°/s)',
+                    data: [],
+                    borderColor: '#00bcd4',
+                    backgroundColor: 'rgba(0, 188, 212, 0.1)',
+                    tension: 0.4,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    title: { display: true, text: 'Açısal Hız (°/s)' }
+                },
+                x: {
+                    title: { display: true, text: 'Zaman' }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            }
+        }
+    });
+
+    // MMA8451 İvme grafik
+    const mmaCtx = document.getElementById('mmaChart').getContext('2d');
+    charts.mma = new Chart(mmaCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'MMA X (g)',
+                    data: [],
+                    borderColor: '#e91e63',
+                    backgroundColor: 'rgba(233, 30, 99, 0.1)',
+                    tension: 0.4,
+                    fill: false
+                },
+                {
+                    label: 'MMA Y (g)',
+                    data: [],
+                    borderColor: '#673ab7',
+                    backgroundColor: 'rgba(103, 58, 183, 0.1)',
+                    tension: 0.4,
+                    fill: false
+                },
+                {
+                    label: 'MMA Z (g)',
+                    data: [],
+                    borderColor: '#795548',
+                    backgroundColor: 'rgba(121, 85, 72, 0.1)',
+                    tension: 0.4,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    title: { display: true, text: 'İvme (g)' }
+                },
+                x: {
+                    title: { display: true, text: 'Zaman' }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            }
+        }
+    });
+
     // Titreşim ve toplam ivme grafik
     const vibrationCtx = document.getElementById('vibrationChart').getContext('2d');
     charts.vibration = new Chart(vibrationCtx, {
@@ -266,17 +368,34 @@ async function loadData() {
 function processData(data) {
     latestData = {
         channel: data.channel,
-        feeds: data.feeds.map(feed => ({
-            created_at: new Date(feed.created_at),
-            vibration: parseFloat(feed.field1) || 0,
-            mpu_x: parseFloat(feed.field2) || 0,
-            mpu_y: parseFloat(feed.field3) || 0,
-            mpu_z: parseFloat(feed.field4) || 0,
-            distance: parseFloat(feed.field5) || 0,
-            temperature: parseFloat(feed.field6) || 0,
-            humidity: parseFloat(feed.field7) || 0,
-            total_accel: parseFloat(feed.field8) || 0
-        }))
+        feeds: data.feeds.map(feed => {
+            // Field2: MPU İvme "X,Y,Z" formatında parse et
+            const mpuAccel = (feed.field2 || "0,0,0").split(',').map(v => parseFloat(v) || 0);
+            // Field3: MPU Gyro "X,Y,Z" formatında parse et  
+            const mpuGyro = (feed.field3 || "0,0,0").split(',').map(v => parseFloat(v) || 0);
+            // Field4: MMA İvme "X,Y,Z" formatında parse et
+            const mmaAccel = (feed.field4 || "0,0,0").split(',').map(v => parseFloat(v) || 0);
+            
+            return {
+                created_at: new Date(feed.created_at),
+                vibration: parseFloat(feed.field1) || 0,
+                mpu_accel_x: mpuAccel[0],
+                mpu_accel_y: mpuAccel[1], 
+                mpu_accel_z: mpuAccel[2],
+                mpu_gyro_x: mpuGyro[0],
+                mpu_gyro_y: mpuGyro[1],
+                mpu_gyro_z: mpuGyro[2],
+                mma_accel_x: mmaAccel[0],
+                mma_accel_y: mmaAccel[1],
+                mma_accel_z: mmaAccel[2],
+                distance: parseFloat(feed.field5) || 0,
+                temperature: parseFloat(feed.field6) || 0,
+                humidity: parseFloat(feed.field7) || 0,
+                // Toplam ivme hesaplama
+                mpu_total_accel: Math.sqrt(mpuAccel[0]**2 + mpuAccel[1]**2 + mpuAccel[2]**2),
+                mma_total_accel: Math.sqrt(mmaAccel[0]**2 + mmaAccel[1]**2 + mmaAccel[2]**2)
+            }
+        })
     };
 }
 
@@ -291,7 +410,7 @@ function updateUI(latestFeed) {
     const vibrationStatus = document.getElementById('vibrationStatus');
     const vibrationTime = document.getElementById('vibrationTime');
     
-    if (parseFloat(latestFeed.field1) === 1) {
+    if (latestFeed.vibration === 1) {
         vibrationStatus.textContent = 'TİTREŞİM ALGILANDI!';
         vibrationCard.classList.add('active');
         vibrationTime.textContent = `⚠️ ${timeStr}`;
@@ -301,11 +420,15 @@ function updateUI(latestFeed) {
         vibrationTime.textContent = `✅ ${timeStr}`;
     }
     
-    // Diğer metrikler
-    document.getElementById('totalAccel').textContent = `${parseFloat(latestFeed.field8 || 0).toFixed(3)} g`;
-    document.getElementById('temperature').textContent = `${parseFloat(latestFeed.field6 || 0).toFixed(1)} °C`;
-    document.getElementById('humidity').textContent = `${parseFloat(latestFeed.field7 || 0).toFixed(1)} %`;
-    document.getElementById('distance').textContent = `${parseFloat(latestFeed.field5 || 0).toFixed(1)} cm`;
+    // Toplam ivme - MPU ve MMA arasından büyük olanı göster
+    const maxTotalAccel = Math.max(latestFeed.mpu_total_accel, latestFeed.mma_total_accel);
+    const totalAccelValue = maxTotalAccel;
+    document.getElementById('totalAccel').textContent = totalAccelValue === 0 ? 
+        'Veri Bekleniyor...' : `${totalAccelValue.toFixed(3)} g`;
+    
+    document.getElementById('temperature').textContent = `${latestFeed.temperature.toFixed(1)} °C`;
+    document.getElementById('humidity').textContent = `${latestFeed.humidity.toFixed(1)} %`;
+    document.getElementById('distance').textContent = `${latestFeed.distance.toFixed(1)} cm`;
     
     // Zaman damgaları
     document.getElementById('accelTime').textContent = timeStr;
@@ -323,48 +446,60 @@ function updateCharts(feeds) {
         })
     );
     
-    // İvme grafik
+    // MPU6050 İvme grafik (X, Y, Z)
     charts.accel.data.labels = labels;
-    charts.accel.data.datasets[0].data = feeds.map(feed => parseFloat(feed.field2) || 0);
-    charts.accel.data.datasets[1].data = feeds.map(feed => parseFloat(feed.field3) || 0);
-    charts.accel.data.datasets[2].data = feeds.map(feed => parseFloat(feed.field4) || 0);
+    charts.accel.data.datasets[0].data = feeds.map(feed => feed.mpu_accel_x);
+    charts.accel.data.datasets[1].data = feeds.map(feed => feed.mpu_accel_y);
+    charts.accel.data.datasets[2].data = feeds.map(feed => feed.mpu_accel_z);
     charts.accel.update('none');
     
-    // Titreşim grafik
+    // MPU6050 Gyro grafik (X, Y, Z)
+    charts.gyro.data.labels = labels;
+    charts.gyro.data.datasets[0].data = feeds.map(feed => feed.mpu_gyro_x);
+    charts.gyro.data.datasets[1].data = feeds.map(feed => feed.mpu_gyro_y);
+    charts.gyro.data.datasets[2].data = feeds.map(feed => feed.mpu_gyro_z);
+    charts.gyro.update('none');
+    
+    // MMA8451 İvme grafik (X, Y, Z)
+    charts.mma.data.labels = labels;
+    charts.mma.data.datasets[0].data = feeds.map(feed => feed.mma_accel_x);
+    charts.mma.data.datasets[1].data = feeds.map(feed => feed.mma_accel_y);
+    charts.mma.data.datasets[2].data = feeds.map(feed => feed.mma_accel_z);
+    charts.mma.update('none');
+    
+    // Titreşim ve toplam ivme grafik
     charts.vibration.data.labels = labels;
-    charts.vibration.data.datasets[0].data = feeds.map(feed => parseFloat(feed.field8) || 0);
-    charts.vibration.data.datasets[1].data = feeds.map(feed => parseFloat(feed.field1) || 0);
+    charts.vibration.data.datasets[0].data = feeds.map(feed => Math.max(feed.mpu_total_accel, feed.mma_total_accel));
+    charts.vibration.data.datasets[1].data = feeds.map(feed => feed.vibration);
     charts.vibration.update('none');
     
-    // Çevre grafik
+    // Çevre grafik (Sıcaklık & Nem)
     charts.env.data.labels = labels;
-    charts.env.data.datasets[0].data = feeds.map(feed => parseFloat(feed.field6) || 0);
-    charts.env.data.datasets[1].data = feeds.map(feed => parseFloat(feed.field7) || 0);
+    charts.env.data.datasets[0].data = feeds.map(feed => feed.temperature);
+    charts.env.data.datasets[1].data = feeds.map(feed => feed.humidity);
     charts.env.update('none');
     
     // Mesafe grafik
     charts.distance.data.labels = labels;
-    charts.distance.data.datasets[0].data = feeds.map(feed => parseFloat(feed.field5) || 0);
+    charts.distance.data.datasets[0].data = feeds.map(feed => feed.distance);
     charts.distance.update('none');
 }
 
 // İstatistikleri hesapla ve güncelle
 function updateStatistics(feeds) {
-    if (feeds.length === 0) return;
-    
-    // Son 24 saat filtrele (ThingSpeak'te zaten filtrelenmiş olabilir)
-    const now = new Date();
-    const last24h = feeds.filter(feed => {
-        const feedTime = new Date(feed.created_at);
-        return (now - feedTime) <= 24 * 60 * 60 * 1000;
-    });
-    
-    // İstatistikleri hesapla
-    const totalVibrations = last24h.filter(feed => parseFloat(feed.field1) === 1).length;
-    const accelValues = last24h.map(feed => parseFloat(feed.field8) || 0);
-    const maxAccel = Math.max(...accelValues);
-    const tempValues = last24h.map(feed => parseFloat(feed.field6) || 0).filter(t => t > 0);
-    const avgTemp = tempValues.length > 0 ? tempValues.reduce((a, b) => a + b, 0) / tempValues.length : 0;
+    if (feeds.length === 0) return;        // Son 24 saat filtrele (ThingSpeak'te zaten filtrelenmiş olabilir)
+        const now = new Date();
+        const last24h = feeds.filter(feed => {
+            const feedTime = new Date(feed.created_at);
+            return (now - feedTime) <= 24 * 60 * 60 * 1000;
+        });
+        
+        // İstatistikleri hesapla
+        const totalVibrations = last24h.filter(feed => feed.vibration === 1).length;
+        const accelValues = last24h.map(feed => Math.max(feed.mpu_total_accel, feed.mma_total_accel));
+        const maxAccel = Math.max(...accelValues);
+        const tempValues = last24h.map(feed => feed.temperature).filter(t => t > 0);
+        const avgTemp = tempValues.length > 0 ? tempValues.reduce((a, b) => a + b, 0) / tempValues.length : 0;
     
     // UI'yi güncelle
     document.getElementById('totalVibrations').textContent = totalVibrations;

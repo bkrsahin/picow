@@ -199,37 +199,28 @@ def send_to_thingspeak(vibration, mpu_data, mma_data, distance, temp, hum):
     
     ThingSpeak Channel Field Mapping:
     - Field 1: Titreşim durumu (0=Normal, 1=Titreşim var)
-    - Field 2: MPU6050 X ekseni ivme (g)
-    - Field 3: MPU6050 Y ekseni ivme (g)  
-    - Field 4: MPU6050 Z ekseni ivme (g)
+    - Field 2: MPU6050 İvme "X,Y,Z" formatında (g)
+    - Field 3: MPU6050 Gyro "X,Y,Z" formatında (°/s)
+    - Field 4: MMA8451 İvme "X,Y,Z" formatında (g)
     - Field 5: Mesafe sensörü (cm)
     - Field 6: Sıcaklık (°C)
     - Field 7: Nem (%)
-    - Field 8: MMA8451 toplam ivme magnitude (g)
+    - Field 8: [Boş - gelecek kullanım için]
     """
     try:
-        # ThingSpeak field'ları:
-        # field1: Titreşim durumu (0/1)
-        # field2: MPU6050 X ekseni ivme
-        # field3: MPU6050 Y ekseni ivme  
-        # field4: MPU6050 Z ekseni ivme
-        # field5: Mesafe (cm)
-        # field6: Sıcaklık (°C)
-        # field7: Nem (%)
-        # field8: MMA8451 toplam ivme
-        
-        # MMA8451 toplam ivme hesaplama
-        mma_total = (mma_data[0]**2 + mma_data[1]**2 + mma_data[2]**2)**0.5
+        # Sensör verilerini birleştir
+        mpu_accel_str = f"{mpu_data[0]:.3f},{mpu_data[1]:.3f},{mpu_data[2]:.3f}"
+        mpu_gyro_str = f"{mpu_data[3]:.1f},{mpu_data[4]:.1f},{mpu_data[5]:.1f}"
+        mma_accel_str = f"{mma_data[0]:.3f},{mma_data[1]:.3f},{mma_data[2]:.3f}"
         
         url = f"{THINGSPEAK_CHANNEL_URL}?api_key={THINGSPEAK_WRITE_API_KEY}"
         url += f"&field1={vibration}"
-        url += f"&field2={mpu_data[0]:.3f}"
-        url += f"&field3={mpu_data[1]:.3f}"
-        url += f"&field4={mpu_data[2]:.3f}"
+        url += f"&field2={mpu_accel_str}"
+        url += f"&field3={mpu_gyro_str}"
+        url += f"&field4={mma_accel_str}"
         url += f"&field5={distance:.1f}"
         url += f"&field6={temp}"
         url += f"&field7={hum}"
-        url += f"&field8={mma_total:.3f}"
         
         response = urequests.get(url)
         
