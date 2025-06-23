@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deprem Takip Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <h1>🌍 Deprem Takip Sistemi Dashboard</h1>
+            <div class="connection-status" id="connectionStatus">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Bağlantı kontrol ediliyor...</span>
+            </div>
+        </header>
+
+        <!-- Ana Metrikler -->
+        <div class="metrics-grid">
+            <div class="metric-card alert-card" id="vibrationCard">
+                <div class="metric-icon">⚠️</div>
+                <div class="metric-content">
+                    <h3>Titreşim Durumu</h3>
+                    <div class="metric-value" id="vibrationStatus">-</div>
+                    <div class="metric-time" id="vibrationTime">-</div>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-icon">📊</div>
+                <div class="metric-content">
+                    <h3>Toplam İvme</h3>
+                    <div class="metric-value" id="totalAccel">- g</div>
+                    <div class="metric-time" id="accelTime">-</div>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-icon">🌡️</div>
+                <div class="metric-content">
+                    <h3>Sıcaklık</h3>
+                    <div class="metric-value" id="temperature">- °C</div>
+                    <div class="metric-time" id="tempTime">-</div>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-icon">💧</div>
+                <div class="metric-content">
+                    <h3>Nem</h3>
+                    <div class="metric-value" id="humidity">- %</div>
+                    <div class="metric-time" id="humTime">-</div>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-icon">📏</div>
+                <div class="metric-content">
+                    <h3>Mesafe</h3>
+                    <div class="metric-value" id="distance">- cm</div>
+                    <div class="metric-time" id="distTime">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grafik Alanı -->
+        <div class="charts-grid">
+            <!-- İvme Grafikleri -->
+            <div class="chart-container">
+                <h3>📈 MPU6050 İvme Sensörü (X, Y, Z)</h3>
+                <canvas id="accelChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>📈 Toplam İvme ve Titreşim</h3>
+                <canvas id="vibrationChart"></canvas>
+            </div>
+
+            <!-- Çevresel Veriler -->
+            <div class="chart-container">
+                <h3>🌡️ Sıcaklık ve Nem</h3>
+                <canvas id="envChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>📏 Mesafe Sensörü</h3>
+                <canvas id="distanceChart"></canvas>
+            </div>
+        </div>
+
+        <!-- İstatistikler -->
+        <div class="stats-grid">
+            <div class="stats-card">
+                <h3>📊 Son 24 Saat İstatistikleri</h3>
+                <div class="stats-content">
+                    <div class="stat-item">
+                        <span class="stat-label">Toplam Titreşim:</span>
+                        <span class="stat-value" id="totalVibrations">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Maksimum İvme:</span>
+                        <span class="stat-value" id="maxAccel">- g</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Ortalama Sıcaklık:</span>
+                        <span class="stat-value" id="avgTemp">- °C</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Son Güncelleme:</span>
+                        <span class="stat-value" id="lastUpdate">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-card">
+                <h3>🚨 Alarm Durumu</h3>
+                <div class="stats-content">
+                    <div class="alarm-status" id="alarmStatus">
+                        <div class="alarm-indicator normal" id="alarmIndicator"></div>
+                        <span id="alarmText">Normal</span>
+                    </div>
+                    <div class="alarm-details" id="alarmDetails">
+                        <p>Sistem normal çalışıyor. Kritik titreşim algılanmadı.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="dashboard-footer">
+            <p>🔄 Otomatik güncelleme: Her 30 saniye | 📡 Veri kaynağı: ThingSpeak API</p>
+            <p>⚡ Raspberry Pi Pico W Deprem İzleme Sistemi</p>
+        </footer>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>

@@ -1,10 +1,14 @@
+# =============================================================================
+# DEPREM TAKİP SİSTEMİ - THİNGSPEAK ENTEGRASYONU
+# =============================================================================
+# Kullanım için aşağıdaki WiFi bilgilerini kendi ağınıza göre değiştirin:
+
 from machine import Pin, I2C
 import time
 from dht import DHT11
 import network
-import socket
+import urequests
 import json
-from web_server import WebServer
 
 # Pin Tanımlamaları
 SW420_PIN = Pin(16, Pin.IN)
@@ -13,11 +17,17 @@ ECHO_PIN = Pin(21, Pin.IN)
 DHT11_PIN = Pin(10, Pin.IN)
 i2c = I2C(0, sda=Pin(4), scl=Pin(5))
 
-# WiFi Access Point Ayarları
-WIFI_SSID = "deprem_takip"
-WIFI_PASSWORD = "123456789d"
+# WiFi Bağlantı Ayarları (İnternet bağlantısı için)
+WIFI_SSID = "SUPERBOX_Wi-Fi_8360"  # Kendi WiFi ağınızın adını yazın
+WIFI_PASSWORD = "5hE5453Eu7"  # Kendi WiFi şifrenizi yazın
 
-# Sensör Adresleri
+# ThingSpeak API Ayarları
+THINGSPEAK_CHANNEL_ID = "2996256"  # ThingSpeak kanalınızın ID numarası
+THINGSPEAK_WRITE_API_KEY = "XC6BSW6SXH6G3I0P"
+THINGSPEAK_READ_API_KEY = "E7RN2WP7L12MNTYQ"
+THINGSPEAK_CHANNEL_URL = "https://api.thingspeak.com/update"
+
+# Sensör Adresları
 MPU6050_ADDR = 0x68
 MMA8451_ADDR = 0x1D
 
@@ -152,126 +162,157 @@ def check_vibration(pin):
         return True
     return False
 
-def setup_access_point():
-    """Access Point kurar"""
+def connect_to_wifi():
+    """WiFi ağına bağlan (İnternet erişimi için)"""
     try:
-        ap = network.WLAN(network.AP_IF)
-        ap.active(True)
-        ap.config(essid=WIFI_SSID, password=WIFI_PASSWORD)
+        wlan = network.WLAN(network.STA_IF)
+        wlan.active(True)
         
-        while not ap.active():
-            time.sleep(0.1)
-        
-        print(f"Access Point kuruldu: {WIFI_SSID}")
-        print(f"IP Adresi: {ap.ifconfig()[0]}")
-        return ap
+        if not wlan.isconnected():
+            print(f"WiFi ağına bağlanılıyor: {WIFI_SSID}")
+            wlan.connect(WIFI_SSID, WIFI_PASSWORD)
+            
+            # Bağlantı kontrolü
+            timeout = 20
+            while not wlan.isconnected() and timeout > 0:
+                time.sleep(1)
+                timeout -= 1
+                print(".", end="")
+            
+            if wlan.isconnected():
+                print(f"\nWiFi bağlantısı başarılı!")
+                print(f"IP Adresi: {wlan.ifconfig()[0]}")
+                return True
+            else:
+                print("\nWiFi bağlantısı başarısız!")
+                return False
+        else:
+            print("WiFi zaten bağlı")
+            return True
+            
     except Exception as e:
-        print(f"Access Point kurulum hatası: {e}")
-        return None
+        print(f"WiFi bağlantı hatası: {e}")
+        return False
 
-def save_sensor_data(vibration_status, mpu_data, mma_data, distance, temp, hum):
-    """Sensör verilerini JSON formatında depolar"""
+def send_to_thingspeak(vibration, mpu_data, mma_data, distance, temp, hum):
+    """Sensör verilerini ThingSpeak'e gönder
+    
+    ThingSpeak Channel Field Mapping:
+    - Field 1: Titreşim durumu (0=Normal, 1=Titreşim var)
+    - Field 2: MPU6050 X ekseni ivme (g)
+    - Field 3: MPU6050 Y ekseni ivme (g)  
+    - Field 4: MPU6050 Z ekseni ivme (g)
+    - Field 5: Mesafe sensörü (cm)
+    - Field 6: Sıcaklık (°C)
+    - Field 7: Nem (%)
+    - Field 8: MMA8451 toplam ivme magnitude (g)
+    """
+    try:
+        # ThingSpeak field'ları:
+        # field1: Titreşim durumu (0/1)
+        # field2: MPU6050 X ekseni ivme
+        # field3: MPU6050 Y ekseni ivme  
+        # field4: MPU6050 Z ekseni ivme
+        # field5: Mesafe (cm)
+        # field6: Sıcaklık (°C)
+        # field7: Nem (%)
+        # field8: MMA8451 toplam ivme
+        
+        # MMA8451 toplam ivme hesaplama
+        mma_total = (mma_data[0]**2 + mma_data[1]**2 + mma_data[2]**2)**0.5
+        
+        url = f"{THINGSPEAK_CHANNEL_URL}?api_key={THINGSPEAK_WRITE_API_KEY}"
+        url += f"&field1={vibration}"
+        url += f"&field2={mpu_data[0]:.3f}"
+        url += f"&field3={mpu_data[1]:.3f}"
+        url += f"&field4={mpu_data[2]:.3f}"
+        url += f"&field5={distance:.1f}"
+        url += f"&field6={temp}"
+        url += f"&field7={hum}"
+        url += f"&field8={mma_total:.3f}"
+        
+        response = urequests.get(url)
+        
+        if response.status_code == 200:
+            entry_id = response.text.strip()
+            if entry_id != "0":
+                print(f"✅ ThingSpeak'e veri gönderildi (Entry ID: {entry_id})")
+                return True
+            else:
+                print("❌ ThingSpeak veri gönderme başarısız (Rate limit?)")
+                return False
+        else:
+            print(f"❌ ThingSpeak HTTP hatası: {response.status_code}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ ThingSpeak gönderme hatası: {e}")
+        return False
+    finally:
+        try:
+            response.close()
+        except:
+            pass
+
+def log_sensor_data(vibration_status, mpu_data, mma_data, distance, temp, hum, thingspeak_success):
+    """Sensör verilerini yerel dosyaya kaydet"""
     try:
         # Zaman damgası
         timestamp = time.ticks_ms()
         
-        # Veri yapısı
-        data = {
-            "timestamp": timestamp,
-            "vibration": vibration_status,
-            "mpu6050": {
-                "accel": {"x": mpu_data[0], "y": mpu_data[1], "z": mpu_data[2]},
-                "gyro": {"x": mpu_data[3], "y": mpu_data[4], "z": mpu_data[5]}
-            },
-            "mma8451": {
-                "accel": {"x": mma_data[0], "y": mma_data[1], "z": mma_data[2]}
-            },
-            "distance": distance,
-            "temperature": temp,
-            "humidity": hum
-        }
-        
-        # JSON string'e çevir (MicroPython uyumlu)
-        json_data = json.dumps(data)
+        # Basit log formatı
+        log_line = f"{timestamp},{vibration_status},{mpu_data[0]:.3f},{mpu_data[1]:.3f},{mpu_data[2]:.3f},"
+        log_line += f"{mma_data[0]:.3f},{mma_data[1]:.3f},{mma_data[2]:.3f},"
+        log_line += f"{distance:.1f},{temp},{hum},{thingspeak_success}\n"
         
         # Dosyaya yaz
-        with open("sensor_data.json", "a") as f:
-            f.write(json_data + "\n" + "-"*50 + "\n")
+        with open("sensor_log.txt", "a") as f:
+            f.write(log_line)
         
-        return json_data
+        return True
     except Exception as e:
-        print(f"Veri kaydetme hatası: {e}")
-        return None
+        print(f"Log kaydetme hatası: {e}")
+        return False
 
 
 
 
-
-def format_json_simple(data, indent_level=0):
-    """MicroPython için basit JSON formatlama"""
-    indent = "  " * indent_level
-    
-    if isinstance(data, dict):
-        lines = ["{"]
-        for i, (key, value) in enumerate(data.items()):
-            comma = "," if i < len(data) - 1 else ""
-            if isinstance(value, (dict, list)):
-                lines.append(f'{indent}  "{key}": {format_json_simple(value, indent_level + 1)}{comma}')
-            elif isinstance(value, str):
-                lines.append(f'{indent}  "{key}": "{value}"{comma}')
-            else:
-                lines.append(f'{indent}  "{key}": {value}{comma}')
-        lines.append(f"{indent}}}")
-        return "\n".join(lines)
-    
-    elif isinstance(data, list):
-        if not data:
-            return "[]"
-        lines = ["["]
-        for i, item in enumerate(data):
-            comma = "," if i < len(data) - 1 else ""
-            lines.append(f"{indent}  {format_json_simple(item, indent_level + 1)}{comma}")
-        lines.append(f"{indent}]")
-        return "\n".join(lines)
-    
-    else:
-        return json.dumps(data)
 
 def main():
-    print("Sistem başlatılıyor...")
+    print("Deprem Takip Sistemi - ThingSpeak Entegrasyonu")
+    print("=" * 50)
     
-    # Access Point kur
-    ap = setup_access_point()
-    if not ap:
-        print("Access Point kurulamadı!")
+    # WiFi bağlantısı kur
+    if not connect_to_wifi():
+        print("HATA: İnternet bağlantısı gerekli!")
+        print("WiFi ayarlarınızı kontrol edin ve sistemi yeniden başlatın.")
         return
-    
-    # Web server'ı başlat
-    web_server = WebServer(port=80)
-    if not web_server.start():
-        print("Web server başlatılamadı!")
-        return
-    
-    print(f"Dashboard adres: http://{ap.ifconfig()[0]}/")
     
     # Sensörleri başlat
-    if not (setup_mpu6050() and setup_mma8451()):
-        print("Sensör başlatma hatası!")
-        return
+    print("Sensörler başlatılıyor...")
+    mpu_ok = setup_mpu6050()
+    mma_ok = setup_mma8451()
+    
+    if not (mpu_ok and mma_ok):
+        print("UYARI: Bazı sensörler başlatılamadı!")
     
     # Titreşim sensörü interrupt'ını ayarla
     SW420_PIN.irq(trigger=Pin.IRQ_RISING, handler=check_vibration)
     
-    print("Sistem hazır, ölçümler başlıyor...")
+    print("Sistem hazır! ThingSpeak'e veri gönderimi başlıyor...")
+    print(f"ThingSpeak Channel: https://thingspeak.com/channels/{THINGSPEAK_CHANNEL_ID}")
+    print("=" * 50)
+    
+    last_thingspeak_send = 0
+    send_interval = 15000  # 15 saniye (ThingSpeak free account limiti)
     
     while True:
         try:
-            # Web isteklerini işle (non-blocking)
-            web_server.handle_requests()
+            current_time = time.ticks_ms()
             
             # Titreşim kontrolü
             vibration_status = SW420_PIN.value()
-            vibration_text = "TİTREŞİM ALGILANDI!" if vibration_status == 1 else "YOK"
+            vibration_text = "TİTREŞİM ALGILANDI!" if vibration_status == 1 else "Normal"
             
             # Sensör verilerini oku
             mpu_ax, mpu_ay, mpu_az, gx, gy, gz = read_mpu6050()
@@ -279,39 +320,50 @@ def main():
             distance = read_hcsr04()
             temp, hum = read_dht11()
             
-            # Web server verilerini güncelle
+            # Verileri konsola yazdır
+            print(f"\n[{current_time}] Sensör Durumu:")
+            print(f"  Titreşim: {vibration_text}")
+            print(f"  MPU6050 İvme (g): X={mpu_ax:.3f}, Y={mpu_ay:.3f}, Z={mpu_az:.3f}")
+            print(f"  MMA8451 İvme (g): X={mma_ax:.3f}, Y={mma_ay:.3f}, Z={mma_az:.3f}")
+            print(f"  Mesafe: {distance:.1f} cm")
+            print(f"  Sıcaklık: {temp}°C, Nem: {hum}%")
+            
+            # ThingSpeak'e veri gönder (belirli aralıklarla)
+            thingspeak_sent = False
+            if time.ticks_diff(current_time, last_thingspeak_send) >= send_interval:
+                mpu_data = (mpu_ax, mpu_ay, mpu_az, gx, gy, gz)
+                mma_data = (mma_ax, mma_ay, mma_az)
+                
+                if send_to_thingspeak(vibration_status, mpu_data, mma_data, distance, temp, hum):
+                    last_thingspeak_send = current_time
+                    thingspeak_sent = True
+                    print(f"  📡 ThingSpeak: Veri gönderildi")
+                else:
+                    print(f"  📡 ThingSpeak: Gönderme başarısız")
+            else:
+                remaining = (send_interval - time.ticks_diff(current_time, last_thingspeak_send)) // 1000
+                print(f"  📡 ThingSpeak: {remaining}s sonra gönderilecek")
+            
+            # Yerel log kaydet
             mpu_data = (mpu_ax, mpu_ay, mpu_az, gx, gy, gz)
             mma_data = (mma_ax, mma_ay, mma_az)
-            web_server.update_data(vibration_status, mpu_data, mma_data, distance, temp, hum)
+            log_sensor_data(vibration_status, mpu_data, mma_data, distance, temp, hum, thingspeak_sent)
             
-            # Verileri JSON formatında kaydet
-            json_data = save_sensor_data(vibration_status, mpu_data, mma_data, distance, temp, hum)
+            # Titreşim durumunda hemen gönder
+            if vibration_status == 1 and time.ticks_diff(current_time, last_thingspeak_send) >= 5000:
+                print("  🚨 ACİL: Titreşim algılandı, hemen ThingSpeak'e gönderiliyor!")
+                if send_to_thingspeak(vibration_status, mpu_data, mma_data, distance, temp, hum):
+                    last_thingspeak_send = current_time
+                    print("  🚨 ACİL gönderim başarılı!")
             
-            # Verileri yazdır
-            print("\n=== Sensör Verileri ===")
-            print(f"SW420 Titreşim Durumu: {vibration_text}")
-            print(f"MPU6050 İvme (g): X={mpu_ax:.2f}, Y={mpu_ay:.2f}, Z={mpu_az:.2f}")
-            print(f"MPU6050 Gyro (°/s): X={gx:.1f}, Y={gy:.1f}, Z={gz:.1f}")
-            print(f"MMA8451 İvme (g): X={mma_ax:.2f}, Y={mma_ay:.2f}, Z={mma_az:.2f}")
-            print(f"Mesafe (cm): {distance:.1f}")
-            print(f"Sıcaklık: {temp}°C, Nem: {hum}%")
-            if json_data:
-                print("✅ Veriler JSON formatında kaydedildi")
-            print("=" * 20)
-            
-            # Bellek temizliği
-            if time.ticks_ms() % 10000 < 50:  # Her 10 saniyede bir
-                web_server.cleanup()
-            
-            time.sleep(0.5)  # Daha hızlı güncelleme için azaltıldı
+            time.sleep(2)  # 2 saniyede bir ölçüm
             
         except KeyboardInterrupt:
-            print("Sistem kapatılıyor...")
-            web_server.stop()
+            print("\nSistem kapatılıyor...")
             break
         except Exception as e:
             print(f"Hata oluştu: {e}")
-            time.sleep(1)
+            time.sleep(5)  # Hata durumunda 5 saniye bekle
 
 if __name__ == '__main__':
     main()
