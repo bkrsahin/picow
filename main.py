@@ -203,98 +203,9 @@ def save_sensor_data(vibration_status, mpu_data, mma_data, distance, temp, hum):
         print(f"Veri kaydetme hatası: {e}")
         return None
 
-def format_human_readable_data(vibration_status, mpu_data, mma_data, distance, temp, hum):
-    """Sensör verilerini insan dostu formatta döndürür"""
-    
-    # Tarih ve saat bilgisi (basit format)
-    timestamp = time.ticks_ms()
-    
-    # Titreşim durumu metni
-    vibration_text = "🚨 TİTREŞİM ALGILANDI!" if vibration_status == 1 else "✅ Normal"
-    
-    # MPU6050 verileri
-    total_acceleration = (mpu_data[0]**2 + mpu_data[1]**2 + mpu_data[2]**2)**0.5
-    
-    # Rapor metni oluştur
-    report = f"""
-╔══════════════════════════════════════════════════════════════╗
-║                    DEPREM TAKİP RAPORU                      ║
-╠══════════════════════════════════════════════════════════════╣
-║ Zaman Damgası: {timestamp} ms                              ║
-║                                                              ║
-║ 🔴 TİTREŞİM DURUMU: {vibration_text:<30} ║
-║                                                              ║
-║ 📊 MPU6050 SENSÖRÜ (Ana İvmeölçer):                        ║
-║   • X Ekseni İvmesi: {mpu_data[0]:>8.3f} g                 ║
-║   • Y Ekseni İvmesi: {mpu_data[1]:>8.3f} g                 ║
-║   • Z Ekseni İvmesi: {mpu_data[2]:>8.3f} g                 ║
-║   • Toplam İvme:     {total_acceleration:>8.3f} g                 ║
-║   • X Dönme Hızı:    {mpu_data[3]:>8.1f} °/s               ║
-║   • Y Dönme Hızı:    {mpu_data[4]:>8.1f} °/s               ║
-║   • Z Dönme Hızı:    {mpu_data[5]:>8.1f} °/s               ║
-║                                                              ║
-║ 📊 MMA8451 SENSÖRÜ (Yedek İvmeölçer):                      ║
-║   • X Ekseni İvmesi: {mma_data[0]:>8.3f} g                 ║
-║   • Y Ekseni İvmesi: {mma_data[1]:>8.3f} g                 ║
-║   • Z Ekseni İvmesi: {mma_data[2]:>8.3f} g                 ║
-║                                                              ║
-║ 📏 MESAFE SENSÖRÜ (HC-SR04):                               ║
-║   • Ölçülen Mesafe:  {distance:>8.1f} cm                   ║
-║                                                              ║
-║ 🌡️  ORTAM KOŞULLARI (DHT11):                               ║
-║   • Sıcaklık:        {temp:>8} °C                          ║
-║   • Nem Oranı:       {hum:>8} %                            ║
-║                                                              ║
-║ 🔍 DEĞERLENDİRME:                                           ║
-║   • İvme Seviyesi: {"🔴 YÜKSEK" if total_acceleration > 1.2 else "🟡 ORTA" if total_acceleration > 0.5 else "🟢 DÜŞÜK":<20} ║
-║   • Titreşim Risk: {"🚨 RİSKLİ" if vibration_status == 1 else "✅ GÜVENLİ":<20} ║
-╚══════════════════════════════════════════════════════════════╝
-"""
-    return report
 
-def save_human_readable_data(vibration_status, mpu_data, mma_data, distance, temp, hum):
-    """İnsan dostu formatta veri kaydet"""
-    try:
-        report = format_human_readable_data(vibration_status, mpu_data, mma_data, distance, temp, hum)
-        
-        # İnsan dostu raporu dosyaya kaydet
-        with open("sensor_report.txt", "a") as f:
-            f.write(report + "\n")
-        
-        return report
-    except Exception as e:
-        print(f"İnsan dostu veri kaydetme hatası: {e}")
-        return None
 
-def save_csv_data(vibration_status, mpu_data, mma_data, distance, temp, hum):
-    """Sensör verilerini CSV formatında kaydet (Excel'de açılabilir)"""
-    try:
-        # CSV dosyası yoksa başlık satırını ekle
-        csv_file = "sensor_data.csv"
-        file_exists = False
-        try:
-            with open(csv_file, "r"):
-                file_exists = True
-        except:
-            pass
-        
-        # Zaman damgası
-        timestamp = time.ticks_ms()
-        
-        # CSV satırı oluştur
-        csv_line = f"{timestamp},{vibration_status},{mpu_data[0]:.3f},{mpu_data[1]:.3f},{mpu_data[2]:.3f},{mpu_data[3]:.1f},{mpu_data[4]:.1f},{mpu_data[5]:.1f},{mma_data[0]:.3f},{mma_data[1]:.3f},{mma_data[2]:.3f},{distance:.1f},{temp},{hum}\n"
-        
-        with open(csv_file, "a") as f:
-            # İlk kayıtsa başlık ekle
-            if not file_exists:
-                header = "Zaman,Titresim,MPU_X,MPU_Y,MPU_Z,Gyro_X,Gyro_Y,Gyro_Z,MMA_X,MMA_Y,MMA_Z,Mesafe,Sicaklik,Nem\n"
-                f.write(header)
-            f.write(csv_line)
-        
-        return csv_line
-    except Exception as e:
-        print(f"CSV veri kaydetme hatası: {e}")
-        return None
+
 
 def format_json_simple(data, indent_level=0):
     """MicroPython için basit JSON formatlama"""
@@ -376,12 +287,6 @@ def main():
             # Verileri JSON formatında kaydet
             json_data = save_sensor_data(vibration_status, mpu_data, mma_data, distance, temp, hum)
             
-            # CSV formatında da kaydet (Excel için)
-            csv_data = save_csv_data(vibration_status, mpu_data, mma_data, distance, temp, hum)
-            
-            # İnsan dostu formatta da kaydet
-            human_report = save_human_readable_data(vibration_status, mpu_data, mma_data, distance, temp, hum)
-            
             # Verileri yazdır
             print("\n=== Sensör Verileri ===")
             print(f"SW420 Titreşim Durumu: {vibration_text}")
@@ -392,10 +297,6 @@ def main():
             print(f"Sıcaklık: {temp}°C, Nem: {hum}%")
             if json_data:
                 print("✅ Veriler JSON formatında kaydedildi")
-            if csv_data:
-                print("✅ Veriler CSV formatında kaydedildi (Excel için)")
-            if human_report:
-                print("✅ İnsan dostu rapor oluşturuldu")
             print("=" * 20)
             
             # Bellek temizliği
