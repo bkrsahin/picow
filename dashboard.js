@@ -349,10 +349,12 @@ async function loadData() {
         // Veriyi işle
         processData(data);
         
-        // UI'yi güncelle
-        updateUI(data.feeds[data.feeds.length - 1]); // Son veri
-        updateCharts(data.feeds);
-        updateStatistics(data.feeds);
+        // UI'yi güncelle - son işlenmiş veriyi kullan
+        if (latestData.feeds && latestData.feeds.length > 0) {
+            updateUI(latestData.feeds[latestData.feeds.length - 1]); 
+            updateCharts(latestData.feeds);
+            updateStatistics(latestData.feeds);
+        }
         
         updateConnectionStatus('connected', `Son güncelleme: ${new Date().toLocaleTimeString('tr-TR')}`);
         isConnected = true;
@@ -403,14 +405,19 @@ function processData(data) {
 function updateUI(latestFeed) {
     if (!latestFeed) return;
     
-    const timeStr = new Date(latestFeed.created_at).toLocaleTimeString('tr-TR');
+    // Son işlenmiş veriyi al
+    const processedFeeds = latestData.feeds;
+    if (!processedFeeds || processedFeeds.length === 0) return;
+    
+    const latestProcessed = processedFeeds[processedFeeds.length - 1];
+    const timeStr = latestProcessed.created_at.toLocaleTimeString('tr-TR');
     
     // Titreşim durumu
     const vibrationCard = document.getElementById('vibrationCard');
     const vibrationStatus = document.getElementById('vibrationStatus');
     const vibrationTime = document.getElementById('vibrationTime');
     
-    if (latestFeed.vibration === 1) {
+    if (latestProcessed.vibration === 1) {
         vibrationStatus.textContent = 'TİTREŞİM ALGILANDI!';
         vibrationCard.classList.add('active');
         vibrationTime.textContent = `⚠️ ${timeStr}`;
@@ -421,14 +428,13 @@ function updateUI(latestFeed) {
     }
     
     // Toplam ivme - MPU ve MMA arasından büyük olanı göster
-    const maxTotalAccel = Math.max(latestFeed.mpu_total_accel, latestFeed.mma_total_accel);
-    const totalAccelValue = maxTotalAccel;
-    document.getElementById('totalAccel').textContent = totalAccelValue === 0 ? 
-        'Veri Bekleniyor...' : `${totalAccelValue.toFixed(3)} g`;
+    const maxTotalAccel = Math.max(latestProcessed.mpu_total_accel || 0, latestProcessed.mma_total_accel || 0);
+    document.getElementById('totalAccel').textContent = maxTotalAccel === 0 ? 
+        'Veri Bekleniyor...' : `${maxTotalAccel.toFixed(3)} g`;
     
-    document.getElementById('temperature').textContent = `${latestFeed.temperature.toFixed(1)} °C`;
-    document.getElementById('humidity').textContent = `${latestFeed.humidity.toFixed(1)} %`;
-    document.getElementById('distance').textContent = `${latestFeed.distance.toFixed(1)} cm`;
+    document.getElementById('temperature').textContent = `${(latestProcessed.temperature || 0).toFixed(1)} °C`;
+    document.getElementById('humidity').textContent = `${(latestProcessed.humidity || 0).toFixed(1)} %`;
+    document.getElementById('distance').textContent = `${(latestProcessed.distance || 0).toFixed(1)} cm`;
     
     // Zaman damgaları
     document.getElementById('accelTime').textContent = timeStr;
@@ -439,8 +445,10 @@ function updateUI(latestFeed) {
 
 // Grafikleri güncelle
 function updateCharts(feeds) {
+    if (!feeds || feeds.length === 0) return;
+    
     const labels = feeds.map(feed => 
-        new Date(feed.created_at).toLocaleTimeString('tr-TR', { 
+        feed.created_at.toLocaleTimeString('tr-TR', { 
             hour: '2-digit', 
             minute: '2-digit' 
         })
@@ -448,40 +456,40 @@ function updateCharts(feeds) {
     
     // MPU6050 İvme grafik (X, Y, Z)
     charts.accel.data.labels = labels;
-    charts.accel.data.datasets[0].data = feeds.map(feed => feed.mpu_accel_x);
-    charts.accel.data.datasets[1].data = feeds.map(feed => feed.mpu_accel_y);
-    charts.accel.data.datasets[2].data = feeds.map(feed => feed.mpu_accel_z);
+    charts.accel.data.datasets[0].data = feeds.map(feed => feed.mpu_accel_x || 0);
+    charts.accel.data.datasets[1].data = feeds.map(feed => feed.mpu_accel_y || 0);
+    charts.accel.data.datasets[2].data = feeds.map(feed => feed.mpu_accel_z || 0);
     charts.accel.update('none');
     
     // MPU6050 Gyro grafik (X, Y, Z)
     charts.gyro.data.labels = labels;
-    charts.gyro.data.datasets[0].data = feeds.map(feed => feed.mpu_gyro_x);
-    charts.gyro.data.datasets[1].data = feeds.map(feed => feed.mpu_gyro_y);
-    charts.gyro.data.datasets[2].data = feeds.map(feed => feed.mpu_gyro_z);
+    charts.gyro.data.datasets[0].data = feeds.map(feed => feed.mpu_gyro_x || 0);
+    charts.gyro.data.datasets[1].data = feeds.map(feed => feed.mpu_gyro_y || 0);
+    charts.gyro.data.datasets[2].data = feeds.map(feed => feed.mpu_gyro_z || 0);
     charts.gyro.update('none');
     
     // MMA8451 İvme grafik (X, Y, Z)
     charts.mma.data.labels = labels;
-    charts.mma.data.datasets[0].data = feeds.map(feed => feed.mma_accel_x);
-    charts.mma.data.datasets[1].data = feeds.map(feed => feed.mma_accel_y);
-    charts.mma.data.datasets[2].data = feeds.map(feed => feed.mma_accel_z);
+    charts.mma.data.datasets[0].data = feeds.map(feed => feed.mma_accel_x || 0);
+    charts.mma.data.datasets[1].data = feeds.map(feed => feed.mma_accel_y || 0);
+    charts.mma.data.datasets[2].data = feeds.map(feed => feed.mma_accel_z || 0);
     charts.mma.update('none');
     
     // Titreşim ve toplam ivme grafik
     charts.vibration.data.labels = labels;
-    charts.vibration.data.datasets[0].data = feeds.map(feed => Math.max(feed.mpu_total_accel, feed.mma_total_accel));
-    charts.vibration.data.datasets[1].data = feeds.map(feed => feed.vibration);
+    charts.vibration.data.datasets[0].data = feeds.map(feed => Math.max(feed.mpu_total_accel || 0, feed.mma_total_accel || 0));
+    charts.vibration.data.datasets[1].data = feeds.map(feed => feed.vibration || 0);
     charts.vibration.update('none');
     
     // Çevre grafik (Sıcaklık & Nem)
     charts.env.data.labels = labels;
-    charts.env.data.datasets[0].data = feeds.map(feed => feed.temperature);
-    charts.env.data.datasets[1].data = feeds.map(feed => feed.humidity);
+    charts.env.data.datasets[0].data = feeds.map(feed => feed.temperature || 0);
+    charts.env.data.datasets[1].data = feeds.map(feed => feed.humidity || 0);
     charts.env.update('none');
     
     // Mesafe grafik
     charts.distance.data.labels = labels;
-    charts.distance.data.datasets[0].data = feeds.map(feed => feed.distance);
+    charts.distance.data.datasets[0].data = feeds.map(feed => feed.distance || 0);
     charts.distance.update('none');
 }
 
