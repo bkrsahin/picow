@@ -219,6 +219,11 @@ def send_to_thingspeak(vibration, mpu_data, mma_data, distance, temp, hum):
         mpu_gyro_str = f"{mpu_data[3]:.1f},{mpu_data[4]:.1f},{mpu_data[5]:.1f}"
         mma_accel_str = f"{mma_data[0]:.3f},{mma_data[1]:.3f},{mma_data[2]:.3f}"
         
+        # URL encoding için virgülü %2C ile değiştir
+        mpu_accel_str = mpu_accel_str.replace(',', '%2C')
+        mpu_gyro_str = mpu_gyro_str.replace(',', '%2C')
+        mma_accel_str = mma_accel_str.replace(',', '%2C')
+        
         url = f"{THINGSPEAK_CHANNEL_URL}?api_key={THINGSPEAK_WRITE_API_KEY}"
         url += f"&field1={vibration}"
         url += f"&field2={mpu_accel_str}"
@@ -228,6 +233,10 @@ def send_to_thingspeak(vibration, mpu_data, mma_data, distance, temp, hum):
         url += f"&field6={temp}"
         url += f"&field7={hum}"
         
+        # Debug için URL'yi yazdır (API key gizli)
+        debug_url = url.replace(THINGSPEAK_WRITE_API_KEY, "***")
+        print(f"📡 Gönderim URL: {debug_url}")
+        
         response = urequests.get(url)
         
         if response.status_code == 200:
@@ -236,10 +245,12 @@ def send_to_thingspeak(vibration, mpu_data, mma_data, distance, temp, hum):
                 print(f"✅ ThingSpeak'e veri gönderildi (Entry ID: {entry_id})")
                 return True
             else:
-                print("❌ ThingSpeak veri gönderme başarısız (Rate limit?)")
+                print("❌ ThingSpeak veri gönderme başarısız (Rate limit - 15s bekleyin)")
+                print(f"📡 Response: {response.text}")
                 return False
         else:
             print(f"❌ ThingSpeak HTTP hatası: {response.status_code}")
+            print(f"📡 Response text: {response.text}")
             return False
             
     except Exception as e:
@@ -334,18 +345,21 @@ def main():
             
             # ThingSpeak'e veri gönder (belirli aralıklarla)
             thingspeak_sent = False
-            if time.ticks_diff(current_time, last_thingspeak_send) >= send_interval:
+            time_since_last = time.ticks_diff(current_time, last_thingspeak_send)
+            
+            if time_since_last >= send_interval:
                 mpu_data = (mpu_ax, mpu_ay, mpu_az, gx, gy, gz)
                 mma_data = (mma_ax, mma_ay, mma_az)
                 
+                print(f"  📡 ThingSpeak gönderim başlatılıyor... (Son gönderimden {time_since_last//1000}s geçti)")
                 if send_to_thingspeak(vibration_status, mpu_data, mma_data, distance, temp, hum):
                     last_thingspeak_send = current_time
                     thingspeak_sent = True
                     print(f"  📡 ThingSpeak: Veri gönderildi")
                 else:
-                    print(f"  📡 ThingSpeak: Gönderme başarısız")
+                    print(f"  📡 ThingSpeak: Gönderme başarısız - {15}s bekleyip tekrar denenecek")
             else:
-                remaining = (send_interval - time.ticks_diff(current_time, last_thingspeak_send)) // 1000
+                remaining = (send_interval - time_since_last) // 1000
                 print(f"  📡 ThingSpeak: {remaining}s sonra gönderilecek")
             
             # Yerel log kaydet

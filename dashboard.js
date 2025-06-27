@@ -454,8 +454,10 @@ function processData(data) {
             let mpuAccel, mpuGyro, mmaAccel;
             
             // Field2: MPU İvme - eğer virgül varsa X,Y,Z formatı, yoksa tek değer
-            if (feed.field2 && feed.field2.includes(',')) {
-                mpuAccel = feed.field2.split(',').map(v => parseFloat(v) || 0);
+            if (feed.field2 && (feed.field2.includes(',') || feed.field2.includes('%2C'))) {
+                // URL decode edilmiş virgülleri handle et
+                const field2Clean = feed.field2.replace(/%2C/g, ',');
+                mpuAccel = field2Clean.split(',').map(v => parseFloat(v) || 0);
             } else {
                 // Eski format: tek değer - bunu X ekseni olarak kullan, Y ve Z'yi 0 yap
                 const singleValue = parseFloat(feed.field2) || 0;
@@ -463,16 +465,18 @@ function processData(data) {
             }
             
             // Field3: MPU Gyro - aynı hibrit yaklaşım
-            if (feed.field3 && feed.field3.includes(',')) {
-                mpuGyro = feed.field3.split(',').map(v => parseFloat(v) || 0);
+            if (feed.field3 && (feed.field3.includes(',') || feed.field3.includes('%2C'))) {
+                const field3Clean = feed.field3.replace(/%2C/g, ',');
+                mpuGyro = field3Clean.split(',').map(v => parseFloat(v) || 0);
             } else {
                 const singleValue = parseFloat(feed.field3) || 0;
                 mpuGyro = [singleValue, 0, 0];
             }
             
             // Field4: MMA İvme - aynı hibrit yaklaşım
-            if (feed.field4 && feed.field4.includes(',')) {
-                mmaAccel = feed.field4.split(',').map(v => parseFloat(v) || 0);
+            if (feed.field4 && (feed.field4.includes(',') || feed.field4.includes('%2C'))) {
+                const field4Clean = feed.field4.replace(/%2C/g, ',');
+                mmaAccel = field4Clean.split(',').map(v => parseFloat(v) || 0);
             } else {
                 const singleValue = parseFloat(feed.field4) || 0;
                 mmaAccel = [singleValue, 0, 0];
