@@ -4,8 +4,8 @@
 const CONFIG = {
     channelId: '2996256', // main.py'den alınan channel ID
     readApiKey: 'E7RN2WP7L12MNTYQ',
-    updateInterval: 8000, // 8 saniye (daha hızlı yanıt)
-    fastUpdateInterval: 3000, // 3 saniye (titreşim algılandığında)
+    updateInterval: 8000, // 8 saniye (hızlı dashboard yanıtı)
+    fastUpdateInterval: 5000, // 5 saniye (kritik durumda - ThingSpeak limit dikkate alınarak)
     maxDataPoints: 50, // Grafiklerde gösterilecek maksimum veri sayısı
     baseUrl: 'https://api.thingspeak.com',
     criticalMode: false // Kritik durum takibi
@@ -395,13 +395,19 @@ async function loadData() {
         console.error('❌ Veri yükleme hatası:', error);
         consecutiveErrors++;
         
+        // Rate limit durumu kontrolü
+        if (error.message.includes('429') || error.message.includes('rate')) {
+            updateConnectionStatus('error', `ThingSpeak rate limit - ${CONFIG.updateInterval/1000}s aralıkla deneniyor`);
+        }
         // Çok fazla hata varsa güncelleme aralığını artır
-        if (consecutiveErrors > 3) {
+        else if (consecutiveErrors > 3) {
             CONFIG.updateInterval = Math.min(CONFIG.updateInterval * 1.5, 60000); // Max 60s
             console.log(`⚠️ Çok fazla hata, güncelleme aralığı artırıldı: ${CONFIG.updateInterval/1000}s`);
+            updateConnectionStatus('error', `Bağlantı sorunu - ${CONFIG.updateInterval/1000}s aralıkla deneniyor`);
+        } else {
+            updateConnectionStatus('error', `Hata: ${error.message}`);
         }
         
-        updateConnectionStatus('error', `Hata: ${error.message}`);
         isConnected = false;
         throw error; // Hata durumunu üst fonksiyona ilet
     }

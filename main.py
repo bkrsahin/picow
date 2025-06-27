@@ -302,7 +302,7 @@ def main():
     print("=" * 50)
     
     last_thingspeak_send = 0
-    send_interval = 10000  # 10 saniye (daha hızlı gönderim)
+    send_interval = 15000  # 15 saniye (ThingSpeak ücretsiz hesap limiti)
     vibration_reset_time = 0  # Titreşim bayrağını sıfırlama zamanı
     
     while True:
@@ -353,9 +353,9 @@ def main():
             mma_data = (mma_ax, mma_ay, mma_az)
             log_sensor_data(vibration_status, mpu_data, mma_data, distance, temp, hum, thingspeak_sent)
             
-            # Titreşim durumunda HEMEN gönder (rate limit olmadan)
-            if vibration_status == 1 and time.ticks_diff(current_time, last_thingspeak_send) >= 2000:
-                print("  🚨 ACİL: Titreşim algılandı, HEMEN ThingSpeak'e gönderiliyor!")
+            # Titreşim durumunda HEMEN gönder (minimum 15s limit)
+            if vibration_status == 1 and time.ticks_diff(current_time, last_thingspeak_send) >= 15000:
+                print("  🚨 ACİL: Titreşim algılandı, ThingSpeak'e gönderiliyor!")
                 mpu_data = (mpu_ax, mpu_ay, mpu_az, gx, gy, gz)
                 mma_data = (mma_ax, mma_ay, mma_az)
                 if send_to_thingspeak(vibration_status, mpu_data, mma_data, distance, temp, hum):
@@ -367,6 +367,9 @@ def main():
                         print("  🚨 Titreşim bayrağı acil gönderim sonrası sıfırlandı")
                 else:
                     print("  🚨 ACİL gönderim başarısız!")
+            elif vibration_status == 1:
+                remaining = (15000 - time.ticks_diff(current_time, last_thingspeak_send)) // 1000
+                print(f"  🚨 TİTREŞİM VAR - ThingSpeak {remaining}s sonra gönderilecek (rate limit)")
             
             time.sleep(1)  # 1 saniyede bir ölçüm (daha hızlı yanıt)
             
