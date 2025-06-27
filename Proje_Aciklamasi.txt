@@ -1,0 +1,220 @@
+# 🏗️ Akıllı Bina İzleme Sistemi - Proje Açıklaması
+
+## 📋 **Sistem Özeti**
+
+Bu proje, **Raspberry Pi Pico W** kullanarak binaların yapısal sağlığını ve çevresel koşullarını 7/24 izleyen modern bir sistemdir. Özellikle **okul binası, hastane, fabrika** gibi kritik yapılarda deprem erken uyarı ve yapısal değişim takibi sağlar.
+
+## 🎯 **Sistem Amacı**
+
+### **Deprem ve Titreşim İzleme:**
+- Bina içinde **küçük titreşimler** algılar
+- **Deprem öncesi** anomalileri tespit eder
+- **Yapısal hasar** oluşmadan uyarı verir
+
+### **Yapısal Sağlık Takibi:**
+- Binanın **zamana bağlı değişimlerini** izler
+- **Çatlak, çökme, eğilme** gibi yapısal sorunları erken tespit eder
+- **Mesafe sensörü** ile duvar/tavan arasındaki değişimleri ölçer
+
+### **Çevresel Koşul Kontrolü:**
+- **Sıcaklık ve nem** takibi
+- **Bina içi konfor** ve güvenlik kontrolü
+
+## 🏫 **Kullanım Alanları**
+
+### **Okul Binaları:**
+- Öğrenci güvenliği için erken uyarı
+- Eski binaların yapısal izlenmesi
+- Deprem tahliye öncesi hazırlık
+
+### **Hastaneler:**
+- Hasta güvenliği kritik alanlar
+- Tıbbi cihaz koruması
+- 7/24 kesintisiz izleme
+
+### **Fabrikalar:**
+- Makine titreşimi analizi
+- Yapısal yorgunluk takibi
+- İş güvenliği
+
+### **Diğer Uygulamalar:**
+- Köprü izleme
+- Baraj güvenliği
+- Tarihi yapı koruması
+- Yüksek binalar
+
+## 🔬 **Teknik Çalışma Prensibi**
+
+### **Sensör Ağı:**
+```
+🔸 SW420: Anlık titreşim algılama
+🔸 MPU6050: 6 eksenli ivme ve dönme ölçümü  
+🔸 MMA8451: Hassas ivme değişimleri
+🔸 HC-SR04: Mesafe değişimi (çatlak takibi)
+🔸 DHT11: Çevresel koşullar
+```
+
+### **Veri Akışı:**
+```
+[Sensörler] → [Pico W] → [WiFi] → [ThingSpeak] → [Web Dashboard]
+     ↓              ↓         ↓           ↓            ↓
+Ölçüm Yapma    Veri İşleme   İnternet   Bulut       Görselleştirme
+```
+
+### **Analiz Yöntemi:**
+- **Gerçek zamanlı** veri toplama (her 2 saniye)
+- **Bulut tabanlı** veri saklama
+- **Trend analizi** ile uzun dönem değişimler
+- **Eşik değer** sistemi ile otomatik alarm
+- **Makine öğrenmesi** ile anomali tespiti
+
+## 📊 **Dashboard Özellikleri**
+
+### **Görsel İzleme:**
+- **6 farklı grafik** ile detaylı analiz
+- **Mobil uyumlu** tasarım
+- **Gerçek zamanlı** güncelleme
+- **Zoomlanabilir** grafikler
+
+### **Akıllı Alarm Sistemi:**
+- 🟢 **Normal**: Güvenli durum (İvme < 1.0g)
+- 🟡 **Uyarı**: Dikkat edilmesi gereken seviye (İvme 1.0-2.0g)
+- 🔴 **Kritik**: Acil önlem gerekli (İvme > 2.0g)
+
+### **İstatistik Analizi:**
+- Son 24 saat özeti
+- Maksimum değerler
+- Ortalama değerler
+- Trend analizi
+- Titreşim sayısı
+
+## 💡 **Pratik Faydalar**
+
+### **Öğretmenler İçin:**
+- **Basit web arayüzü** - teknik bilgi gerektirmez
+- **Anlık durum** kontrolü
+- **Otomatik uyarılar**
+- **Geçmiş veri** inceleme
+
+### **İdare İçin:**
+- **Uzaktan izleme** - her yerden erişim
+- **Rapor alma** - geçmiş veriler
+- **Maliyet etkin** çözüm
+- **Bakım planlaması**
+
+### **Güvenlik İçin:**
+- **7/24 izleme** - gece dahil
+- **Erken uyarı** - hasar olmadan
+- **Dokümantasyon** - tüm veriler kayıtlı
+- **Acil durum** otomasyonu
+
+## 🌐 **Erişim ve Kullanım**
+
+**Dashboard Adresi:** https://bkrsahin.github.io/picow/
+
+### **Cihaz Uyumluluğu:**
+- 📱 **Telefon, tablet, bilgisayar** her cihazdan açılır
+- 🔄 **Otomatik güncelleme** - sürekli canlı veri
+- 📊 **Grafik analizi** - geçmiş verileri görebilme
+- 🚨 **Alarm sistemi** - kritik durumlarda uyarı
+
+### **Kullanım Kolaylığı:**
+- İnternet tarayıcısı ile açılır
+- Kurulum gerektirmez
+- Otomatik güncellenir
+- Şifre gerektirmez
+
+## 🏆 **Sistem Avantajları**
+
+### **Ekonomik:**
+✅ **Düşük maliyet**: Pahalı sismik cihazlara alternatif  
+✅ **Tek seferlik yatırım**: Abonelık ücreti yok  
+✅ **Düşük enerji**: Pil ile çalışabilir  
+
+### **Teknik:**
+✅ **Kolay kurulum**: Tek cihaz, WiFi bağlantısı yeterli  
+✅ **Sürekli izleme**: 7/24 kesintisiz takip  
+✅ **Yüksek hassasiyet**: Çoklu sensör sistemi  
+
+### **Kullanım:**
+✅ **Uzaktan erişim**: İnternet olan her yerden  
+✅ **Erken uyarı**: Hasar olmadan tespit  
+✅ **Dokümantasyon**: Tüm veriler bulutta saklanır  
+
+## 🔧 **Teknik Özellikler**
+
+### **Donanım:**
+- **İşlemci**: Raspberry Pi Pico W (WiFi dahili)
+- **Sensörler**: 5 farklı sensör
+- **Güç**: USB veya batarya
+- **Boyut**: Kompakt tasarım
+
+### **Yazılım:**
+- **Platform**: MicroPython
+- **Bulut**: ThingSpeak API
+- **Dashboard**: Modern web teknolojileri
+- **Grafik**: Chart.js kütüphanesi
+
+### **Performans:**
+- **Veri toplama**: 2 saniyede bir
+- **Buluta gönderim**: 15 saniyede bir
+- **Dashboard güncelleme**: 30 saniyede bir
+- **Veri saklama**: Sınırsız (bulut)
+
+## 📈 **Gelecek Geliştirmeler**
+
+### **Planlanan Özellikler:**
+- 📧 **Email/SMS** uyarı sistemi
+- 🤖 **Yapay zeka** ile anomali tespiti
+- 📱 **Mobil uygulama** geliştirme
+- 🔗 **Çoklu cihaz** ağ sistemi
+- 📊 **Gelişmiş raporlama** modülü
+
+### **Entegrasyon İmkanları:**
+- Yangın alarm sistemi
+- Güvenlik kameraları  
+- Havalandırma kontrolü
+- Aydınlatma otomasyonu
+
+## 🎓 **Eğitim Değeri**
+
+### **Öğrenciler İçin:**
+- **STEM eğitimi**: Mühendislik uygulaması
+- **Programlama**: Python öğrenme
+- **Sensör teknolojisi**: Pratik uygulama
+- **Veri analizi**: Grafik okuma
+
+### **Öğretmenler İçin:**
+- **Ders materyali**: Canlı veri örnekleri
+- **Proje çalışması**: Grup projesi
+- **Teknoloji entegrasyonu**: Modern araçlar
+
+## 🌍 **Sosyal Etki**
+
+### **Toplum Güvenliği:**
+- Erken uyarı sistemi
+- Hayat kurtarıcı teknoloji
+- Maliyet etkin çözüm
+
+### **Çevre Bilinci:**
+- Düşük enerji tüketimi
+- Sürdürülebilir teknoloji
+- Geri dönüşümlü malzemeler
+
+---
+
+## 📞 **İletişim ve Destek**
+
+**Proje Repository**: https://github.com/bkrsahin/picow
+**Dashboard URL**: https://bkrsahin.github.io/picow/
+
+### **Teknik Destek:**
+- GitHub Issues sistemi
+- Dokümantasyon ve rehberler
+- Community desteği
+
+---
+
+**🌟 Bu sistem sayesinde bina güvenliği artık cebinizde! 📱🏗️**
+
+**"Akıllı teknoloji ile güvenli gelecek" - Modern çağın ihtiyacı olan erken uyarı sistemi**

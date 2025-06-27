@@ -4,15 +4,20 @@
 const CONFIG = {
     channelId: '2996256', // main.py'den alınan channel ID
     readApiKey: 'E7RN2WP7L12MNTYQ',
-    updateInterval: 30000, // 30 saniye
+    updateInterval: 8000, // 8 saniye (daha hızlı yanıt)
+    fastUpdateInterval: 3000, // 3 saniye (titreşim algılandığında)
     maxDataPoints: 50, // Grafiklerde gösterilecek maksimum veri sayısı
-    baseUrl: 'https://api.thingspeak.com'
+    baseUrl: 'https://api.thingspeak.com',
+    criticalMode: false // Kritik durum takibi
 };
 
 // Global değişkenler
 let charts = {};
 let latestData = {};
 let isConnected = false;
+let updateTimer = null; // Timer kontrolü için
+let consecutiveErrors = 0; // Hata sayacı
+let lastVibrationTime = 0; // Son titreşim zamanı
 
 // Sayfa yüklendiğinde başlat
 document.addEventListener('DOMContentLoaded', function() {
@@ -29,11 +34,30 @@ document.addEventListener('DOMContentLoaded', function() {
     // İlk veri yükleme
     loadData();
     
-    // Otomatik güncelleme
-    setInterval(loadData, CONFIG.updateInterval);
+    // Akıllı güncelleme sistemi başlat
+    startAdaptiveUpdates();
     
-    console.log(`✅ Dashboard hazır! ${CONFIG.updateInterval/1000}s aralıklarla güncelleniyor.`);
+    console.log(`✅ Dashboard hazır! Akıllı güncelleme sistemi aktif.`);
 });
+
+// Akıllı güncelleme sistemi
+function startAdaptiveUpdates() {
+    function scheduleNextUpdate() {
+        // Kritik durumda daha hızlı güncelle
+        const interval = CONFIG.criticalMode ? CONFIG.fastUpdateInterval : CONFIG.updateInterval;
+        
+        updateTimer = setTimeout(() => {
+            loadData().then(() => {
+                scheduleNextUpdate(); // Rekursif olarak devam et
+            }).catch(() => {
+                // Hata durumunda biraz bekle ve tekrar dene
+                setTimeout(scheduleNextUpdate, 5000);
+            });
+        }, interval);
+    }
+    
+    scheduleNextUpdate();
+}
 
 // Grafikleri başlat
 function initializeCharts() {
@@ -351,18 +375,67 @@ async function loadData() {
         
         // UI'yi güncelle - son işlenmiş veriyi kullan
         if (latestData.feeds && latestData.feeds.length > 0) {
-            updateUI(latestData.feeds[latestData.feeds.length - 1]); 
+            const latestFeed = latestData.feeds[latestData.feeds.length - 1];
+            
+            // Kritik durum kontrolü - titreşim algılandıysa hızlı moda geç
+            checkCriticalStatus(latestFeed);
+            
+            updateUI(latestFeed); 
             updateCharts(latestData.feeds);
             updateStatistics(latestData.feeds);
         }
         
-        updateConnectionStatus('connected', `Son güncelleme: ${new Date().toLocaleTimeString('tr-TR')}`);
+        const currentTime = new Date().toLocaleTimeString('tr-TR');
+        const interval = CONFIG.criticalMode ? CONFIG.fastUpdateInterval/1000 : CONFIG.updateInterval/1000;
+        updateConnectionStatus('connected', `Son güncelleme: ${currentTime} (${interval}s aralık)`);
         isConnected = true;
+        consecutiveErrors = 0; // Başarılı veri yükleme sonrası hata sayacını sıfırla
         
     } catch (error) {
         console.error('❌ Veri yükleme hatası:', error);
+        consecutiveErrors++;
+        
+        // Çok fazla hata varsa güncelleme aralığını artır
+        if (consecutiveErrors > 3) {
+            CONFIG.updateInterval = Math.min(CONFIG.updateInterval * 1.5, 60000); // Max 60s
+            console.log(`⚠️ Çok fazla hata, güncelleme aralığı artırıldı: ${CONFIG.updateInterval/1000}s`);
+        }
+        
         updateConnectionStatus('error', `Hata: ${error.message}`);
         isConnected = false;
+        throw error; // Hata durumunu üst fonksiyona ilet
+    }
+}
+
+// Kritik durum kontrolü
+function checkCriticalStatus(latestFeed) {
+    const currentTime = Date.now();
+    const wasInCriticalMode = CONFIG.criticalMode;
+    
+    // Titreşim algılandıysa kritik moda geç
+    if (latestFeed.vibration === 1) {
+        CONFIG.criticalMode = true;
+        lastVibrationTime = currentTime;
+        console.log('🚨 KRİTİK MOD AKTİF - Hızlı güncelleme başladı');
+    }
+    // 30 saniye sonra normal moda dön
+    else if (CONFIG.criticalMode && currentTime - lastVibrationTime > 30000) {
+        CONFIG.criticalMode = false;
+        console.log('✅ Normal moda geçildi - Standart güncelleme aralığı');
+    }
+    
+    // Yüksek ivme değerleri kontrolü
+    const maxAccel = Math.max(latestFeed.mpu_total_accel || 0, latestFeed.mma_total_accel || 0);
+    if (maxAccel > 2.0) {
+        CONFIG.criticalMode = true;
+        lastVibrationTime = currentTime;
+        console.log(`🚨 YÜKSEK İVME ALGILANDI: ${maxAccel.toFixed(3)}g - Kritik mod aktif`);
+    }
+    
+    // Mod değişikliği log
+    if (wasInCriticalMode !== CONFIG.criticalMode) {
+        const interval = CONFIG.criticalMode ? CONFIG.fastUpdateInterval : CONFIG.updateInterval;
+        console.log(`🔄 Güncelleme modu değişti: ${interval/1000}s aralık`);
     }
 }
 
@@ -488,13 +561,16 @@ function updateCharts(feeds) {
     const limitedFeeds = feeds.slice(-maxPoints);
     const limitedLabels = labels.slice(-maxPoints);
     
+    // Batch güncelleme ile performans artışı
+    const updates = [];
+    
     // MPU6050 İvme grafik (X, Y, Z) - null safety eklendi
     if (charts.accel) {
         charts.accel.data.labels = limitedLabels;
         charts.accel.data.datasets[0].data = limitedFeeds.map(feed => feed.mpu_accel_x || 0);
         charts.accel.data.datasets[1].data = limitedFeeds.map(feed => feed.mpu_accel_y || 0);
         charts.accel.data.datasets[2].data = limitedFeeds.map(feed => feed.mpu_accel_z || 0);
-        charts.accel.update('none');
+        updates.push(() => charts.accel.update('none'));
     }
     
     // MPU6050 Gyro grafik (X, Y, Z) - null safety eklendi
@@ -503,7 +579,7 @@ function updateCharts(feeds) {
         charts.gyro.data.datasets[0].data = limitedFeeds.map(feed => feed.mpu_gyro_x || 0);
         charts.gyro.data.datasets[1].data = limitedFeeds.map(feed => feed.mpu_gyro_y || 0);
         charts.gyro.data.datasets[2].data = limitedFeeds.map(feed => feed.mpu_gyro_z || 0);
-        charts.gyro.update('none');
+        updates.push(() => charts.gyro.update('none'));
     }
     
     // MMA8451 İvme grafik (X, Y, Z) - null safety eklendi
@@ -512,7 +588,7 @@ function updateCharts(feeds) {
         charts.mma.data.datasets[0].data = limitedFeeds.map(feed => feed.mma_accel_x || 0);
         charts.mma.data.datasets[1].data = limitedFeeds.map(feed => feed.mma_accel_y || 0);
         charts.mma.data.datasets[2].data = limitedFeeds.map(feed => feed.mma_accel_z || 0);
-        charts.mma.update('none');
+        updates.push(() => charts.mma.update('none'));
     }
     
     // Titreşim ve toplam ivme grafik - null safety eklendi
@@ -522,7 +598,7 @@ function updateCharts(feeds) {
             Math.max(feed.mpu_total_accel || 0, feed.mma_total_accel || 0)
         );
         charts.vibration.data.datasets[1].data = limitedFeeds.map(feed => feed.vibration || 0);
-        charts.vibration.update('none');
+        updates.push(() => charts.vibration.update('none'));
     }
     
     // Çevre grafik (Sıcaklık & Nem) - null safety eklendi
@@ -530,17 +606,21 @@ function updateCharts(feeds) {
         charts.env.data.labels = limitedLabels;
         charts.env.data.datasets[0].data = limitedFeeds.map(feed => feed.temperature || 0);
         charts.env.data.datasets[1].data = limitedFeeds.map(feed => feed.humidity || 0);
-        charts.env.update('none');
+        updates.push(() => charts.env.update('none'));
     }
     
     // Mesafe grafik - null safety eklendi
     if (charts.distance) {
         charts.distance.data.labels = limitedLabels;
         charts.distance.data.datasets[0].data = limitedFeeds.map(feed => feed.distance || 0);
-        charts.distance.update('none');
+        updates.push(() => charts.distance.update('none'));
     }
     
-    console.log(`📊 ${Object.keys(charts).length} grafik güncellendi, ${limitedFeeds.length} veri noktası`);
+    // Tüm grafikleri batch olarak güncelle
+    requestAnimationFrame(() => {
+        updates.forEach(update => update());
+        console.log(`📊 ${updates.length} grafik güncellendi, ${limitedFeeds.length} veri noktası`);
+    });
 }
 
 // İstatistikleri hesapla ve güncelle
@@ -671,6 +751,25 @@ window.addEventListener('online', function() {
     if (!isConnected) {
         console.log('🌐 İnternet bağlantısı geri geldi, veri yükleniyor...');
         loadData();
+    }
+});
+
+// Page Visibility API - sayfa görünür değilken güncellemeyi yavaşlat
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        console.log('👁️ Sayfa gizlendi, güncelleme yavaşlatıldı');
+        // Güncelleme aralığını 2x artır
+        if (updateTimer) {
+            clearTimeout(updateTimer);
+            setTimeout(() => startAdaptiveUpdates(), CONFIG.updateInterval * 2);
+        }
+    } else {
+        console.log('👁️ Sayfa görünür oldu, normal güncelleme devam ediyor');
+        // Normal güncellemeye geri dön
+        if (updateTimer) {
+            clearTimeout(updateTimer);
+            startAdaptiveUpdates();
+        }
     }
 });
 

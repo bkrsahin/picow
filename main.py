@@ -302,7 +302,7 @@ def main():
     print("=" * 50)
     
     last_thingspeak_send = 0
-    send_interval = 15000  # 15 saniye (ThingSpeak free account limiti)
+    send_interval = 10000  # 10 saniye (daha hızlı gönderim)
     vibration_reset_time = 0  # Titreşim bayrağını sıfırlama zamanı
     
     while True:
