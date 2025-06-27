@@ -33,6 +33,8 @@ MMA8451_ADDR = 0x1D
 
 # Global değişkenler
 last_vibration = 0
+vibration_detected = False  # Titreşim algılandı bayrağı
+vibration_count = 0  # Titreşim sayacı
 alarm_threshold = 1.5  # İvme eşik değeri (g)
 
 def setup_mpu6050():
@@ -155,12 +157,16 @@ def read_dht11():
         return 0, 0
 
 def check_vibration(pin):
-    global last_vibration
+    """SW420 titreşim sensörü interrupt handler"""
+    global last_vibration, vibration_detected, vibration_count
     current_time = time.ticks_ms()
-    if time.ticks_diff(current_time, last_vibration) > 100:  # Debounce
+    
+    # Debounce kontrolü - 50ms içinde tekrar tetikleme engelle
+    if time.ticks_diff(current_time, last_vibration) > 50:
         last_vibration = current_time
-        return True
-    return False
+        vibration_detected = True  # Titreşim algılandı bayrağını set et
+        vibration_count += 1
+        print(f"🚨 TİTREŞİM ALGILANDI! (#{vibration_count}) - {current_time}ms")
 
 def connect_to_wifi():
     """WiFi ağına bağlan (İnternet erişimi için)"""
@@ -270,6 +276,7 @@ def log_sensor_data(vibration_status, mpu_data, mma_data, distance, temp, hum, t
 
 
 def main():
+    global vibration_detected, vibration_count  # Global değişkenleri main'de tanımla
     print("Deprem Takip Sistemi - ThingSpeak Entegrasyonu")
     print("=" * 50)
     
@@ -287,8 +294,8 @@ def main():
     if not (mpu_ok and mma_ok):
         print("UYARI: Bazı sensörler başlatılamadı!")
     
-    # Titreşim sensörü interrupt'ını ayarla
-    SW420_PIN.irq(trigger=Pin.IRQ_RISING, handler=check_vibration)
+    # Titreşim sensörü interrupt'ını ayarla - hem yükselen hem düşen kenar
+    SW420_PIN.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=check_vibration)
     
     print("Sistem hazır! ThingSpeak'e veri gönderimi başlıyor...")
     print(f"ThingSpeak Channel: https://thingspeak.com/channels/{THINGSPEAK_CHANNEL_ID}")
@@ -296,14 +303,20 @@ def main():
     
     last_thingspeak_send = 0
     send_interval = 15000  # 15 saniye (ThingSpeak free account limiti)
+    vibration_reset_time = 0  # Titreşim bayrağını sıfırlama zamanı
     
     while True:
         try:
             current_time = time.ticks_ms()
             
-            # Titreşim kontrolü
-            vibration_status = SW420_PIN.value()
+            # Titreşim durumu kontrolü - hem interrupt hem pin değeri
+            vibration_status = 1 if vibration_detected else SW420_PIN.value()
             vibration_text = "TİTREŞİM ALGILANDI!" if vibration_status == 1 else "Normal"
+            
+            # Titreşim bayrağını 3 saniye sonra sıfırla
+            if vibration_detected and time.ticks_diff(current_time, last_vibration) > 3000:
+                vibration_detected = False
+                print("✅ Titreşim bayrağı sıfırlandı")
             
             # Sensör verilerini oku
             mpu_ax, mpu_ay, mpu_az, gx, gy, gz = read_mpu6050()
@@ -313,7 +326,7 @@ def main():
             
             # Verileri konsola yazdır
             print(f"\n[{current_time}] Sensör Durumu:")
-            print(f"  Titreşim: {vibration_text}")
+            print(f"  Titreşim: {vibration_text} (Pin: {SW420_PIN.value()}, Flag: {vibration_detected})")
             print(f"  MPU6050 İvme (g): X={mpu_ax:.3f}, Y={mpu_ay:.3f}, Z={mpu_az:.3f}")
             print(f"  MMA8451 İvme (g): X={mma_ax:.3f}, Y={mma_ay:.3f}, Z={mma_az:.3f}")
             print(f"  Mesafe: {distance:.1f} cm")
@@ -340,14 +353,22 @@ def main():
             mma_data = (mma_ax, mma_ay, mma_az)
             log_sensor_data(vibration_status, mpu_data, mma_data, distance, temp, hum, thingspeak_sent)
             
-            # Titreşim durumunda hemen gönder
-            if vibration_status == 1 and time.ticks_diff(current_time, last_thingspeak_send) >= 5000:
-                print("  🚨 ACİL: Titreşim algılandı, hemen ThingSpeak'e gönderiliyor!")
+            # Titreşim durumunda HEMEN gönder (rate limit olmadan)
+            if vibration_status == 1 and time.ticks_diff(current_time, last_thingspeak_send) >= 2000:
+                print("  🚨 ACİL: Titreşim algılandı, HEMEN ThingSpeak'e gönderiliyor!")
+                mpu_data = (mpu_ax, mpu_ay, mpu_az, gx, gy, gz)
+                mma_data = (mma_ax, mma_ay, mma_az)
                 if send_to_thingspeak(vibration_status, mpu_data, mma_data, distance, temp, hum):
                     last_thingspeak_send = current_time
                     print("  🚨 ACİL gönderim başarılı!")
+                    # Titreşim durumunda bayrağı sıfırla
+                    if vibration_detected:
+                        vibration_detected = False
+                        print("  🚨 Titreşim bayrağı acil gönderim sonrası sıfırlandı")
+                else:
+                    print("  🚨 ACİL gönderim başarısız!")
             
-            time.sleep(2)  # 2 saniyede bir ölçüm
+            time.sleep(1)  # 1 saniyede bir ölçüm (daha hızlı yanıt)
             
         except KeyboardInterrupt:
             print("\nSistem kapatılıyor...")
